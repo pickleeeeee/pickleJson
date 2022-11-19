@@ -33,10 +33,42 @@ static void test_parse_null(){
 static void test_parse_expect_value(){
     pickle_value v;
     v.type = PICKLE_FALSE;
+    EXPECT_EQ_INT(PICKLE_PARSE_EXPECT_VALUE, pickle_parse(&v,""));
+    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
 
+    v.type = PICKLE_FALSE;
+    EXPECT_EQ_INT(PICKLE_PARSE_EXPECT_VALUE, pickle_parse(&v," "));
+    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
 }
-int main(){
+
+static void test_parse_invalid_value(){
+    pickle_value v;
+    v.type = PICKLE_FALSE;
+    EXPECT_EQ_INT(PICKLE_PARSE_INVALID_VALUE, pickle_parse(&v,"nul"));
+    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
+
+    v.type = PICKLE_FALSE;
+    EXPECT_EQ_INT(PICKLE_PARSE_INVALID_VALUE, pickle_parse(&v,"?"));
+    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
+}
+
+static void test_parse_root_not_singular(){
+    pickle_value v;
+    v.type = PICKLE_FALSE;
+    EXPECT_EQ_INT(PICKLE_PARSE_ROOT_NOT_SINGULAR, pickle_parse(&v,"null x"));
+    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
+}
+
+static void test_parse(){
     test_parse_null();
+    test_parse_expect_value();
+    test_parse_invalid_value();
+    test_parse_root_not_singular();
+}
+
+int main(){
+    test_parse();
+    printf("%d/%d (%3.2f%%) passed]\n",test_pass,test_count,test_pass*100.0/test_count);
     return main_ret;
 }
 
