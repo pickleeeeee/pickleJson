@@ -22,43 +22,26 @@ static void pickle_parse_whitespace(pickle_context* c){
     c->json = p;
 }
 
-static int pickle_parse_null(pickle_context* c, pickle_value* v){
-    EXPECT(c,'n');
-    if(c->json[0] != 'u' || c->json[1] != 'l' || c->json[2] != 'l')
-        return PICKLE_PARSE_INVALID_VALUE;
-    c->json += 3;
-    v->type = PICKLE_NULL;
-    return PICKLE_PARSE_OK;
-}
-
-static int pickle_parse_true(pickle_context* c, pickle_value* v){
-    EXPECT(c,'t');
-    if(c->json[0] != 'r' || c->json[1] != 'u' || c->json[2] != 'e')
-        return PICKLE_PARSE_INVALID_VALUE;
-    c->json += 3;
-    v->type = PICKLE_TRUE;
-    return PICKLE_PARSE_OK;
-}
-
-static int pickle_parse_false(pickle_context* c,pickle_value* v){
-    EXPECT(c,'f');
-    if(c->json[0] != 'a' || c->json[1] != 'l' || c->json[2] != 's' || c->json[3] != 'e')
-        return PICKLE_PARSE_INVALID_VALUE;
-    c->json +=4;
-    v->type = PICKLE_FALSE;
+static int pickle_parse_literal(pickle_context* c, pickle_value* v,const char* literal,pickle_type type){
+    size_t i;
+    EXPECT(c,literal[0]);
+    for(i=0; literal[i + 1]; i++)
+        if(c->json[i] != literal[i + 1])
+            return PICKLE_PARSE_INVALID_VALUE;
+    c->json+=i;
+    v->type = type;
     return PICKLE_PARSE_OK;
 }
 
 static int pickle_parse_value(pickle_context* c, pickle_value* v){
     switch (*c->json) {
-        case 'n':   return pickle_parse_null(c,v);
-        case 't':   return pickle_parse_true(c,v);
-        case 'f':   return pickle_parse_false(c,v);
+        case 'n':   return pickle_parse_literal(c,v,"null",PICKLE_NULL);
+        case 't':   return pickle_parse_literal(c,v,"true",PICKLE_TRUE);
+        case 'f':   return pickle_parse_literal(c,v,"false",PICKLE_FALSE);
         case '\0':  return PICKLE_PARSE_EXPECT_VALUE;
         default:    return PICKLE_PARSE_INVALID_VALUE;
     }
 }
-
 
 int pickle_parse(pickle_value* v, const char* json){
     pickle_context c;
