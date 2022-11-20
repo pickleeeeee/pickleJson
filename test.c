@@ -23,6 +23,15 @@ static int test_pass = 0;
 
 #define EXPECT_EQ_INT(expect, actual) EXPECT_EQ_BASE((expect) == (actual),expect,actual,"%d")
 
+#define TEST_ERROR(error, json)\
+    do{\
+        pickle_value v;\
+        v.type = PICKLE_FALSE;\
+        EXPECT_EQ_INT(error, pickle_parse(&v, json));\
+        EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));\
+    }while(0)
+
+
 static void test_parse_null(){
     pickle_value v;
     v.type = PICKLE_FALSE;
@@ -31,32 +40,17 @@ static void test_parse_null(){
 }
 
 static void test_parse_expect_value(){
-    pickle_value v;
-    v.type = PICKLE_FALSE;
-    EXPECT_EQ_INT(PICKLE_PARSE_EXPECT_VALUE, pickle_parse(&v,""));
-    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
-
-    v.type = PICKLE_FALSE;
-    EXPECT_EQ_INT(PICKLE_PARSE_EXPECT_VALUE, pickle_parse(&v," "));
-    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
+    TEST_ERROR(PICKLE_PARSE_EXPECT_VALUE, "");
+    TEST_ERROR(PICKLE_PARSE_EXPECT_VALUE, " ");
 }
 
 static void test_parse_invalid_value(){
-    pickle_value v;
-    v.type = PICKLE_FALSE;
-    EXPECT_EQ_INT(PICKLE_PARSE_INVALID_VALUE, pickle_parse(&v,"nul"));
-    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
-
-    v.type = PICKLE_FALSE;
-    EXPECT_EQ_INT(PICKLE_PARSE_INVALID_VALUE, pickle_parse(&v,"?"));
-    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
+    TEST_ERROR(PICKLE_PARSE_INVALID_VALUE,"nul");
+    TEST_ERROR(PICKLE_PARSE_INVALID_VALUE,"?");
 }
 
 static void test_parse_root_not_singular(){
-    pickle_value v;
-    v.type = PICKLE_FALSE;
-    EXPECT_EQ_INT(PICKLE_PARSE_ROOT_NOT_SINGULAR, pickle_parse(&v, "null x"));
-    EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
+    TEST_ERROR(PICKLE_PARSE_ROOT_NOT_SINGULAR,"null x");
 }
 
 static void test_parse_true(){
