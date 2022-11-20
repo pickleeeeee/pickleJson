@@ -4,8 +4,12 @@
 #include "picklejson.h"
 #include <assert.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define EXPECT(c, ch)    do { assert(*c->json==(ch)); c->json++; } while(0)
+#define ISDIGIT(ch)      ((ch) >= '0' && (ch) <= '9')
+#define ISDIGIT1TO9(ch)      ((ch) >= '1' && (ch) <= '9')
+
 
 typedef struct{
     const char* json;
@@ -33,13 +37,41 @@ static int pickle_parse_literal(pickle_context* c, pickle_value* v,const char* l
     return PICKLE_PARSE_OK;
 }
 
+static int pickle_parse_number(pickle_context* c,pickle_value* v){
+    const char* p = c->json;
+    if(*p == '-') p++;
+    if(*p == '0') p++;
+    else{
+        if(!ISDIGIT1TO9(*p)) return PICKLE_PARSE_INVALID_VALUE;
+        for(p++; ISDIGIT(*p); p++);
+    }
+    if(*p == '.'){
+        p++;
+        if(!ISDIGIT(*p)) return PICKLE_PARSE_INVALID_VALUE;
+        for(p++; ISDIGIT(*p);p++);
+    }
+    if(*p == 'e' || *p == 'E'){
+        p++;
+        if(*p == '+' || *p == '-') p++;
+        if(!ISDIGIT(*p)) return PICKLE_PARSE_INVALID_VALUE;
+        for(p++; ISDIGIT(*p); p++);
+    }
+    errno = 0;
+    v->n = strtod(c->json,NULL);
+    if(errno == ERANGE && (v->n == HUGE_VAL || v->n == -HUGE_VAL))
+        return PICKLE_PARSE_NUMBER_TOO_BIG;
+    v->type = PICKLE_NUMBER;
+    c->json = p;
+    return PICKLE_PARSE_OK;
+}
+
 static int pickle_parse_value(pickle_context* c, pickle_value* v){
     switch (*c->json) {
         case 'n':   return pickle_parse_literal(c,v,"null",PICKLE_NULL);
         case 't':   return pickle_parse_literal(c,v,"true",PICKLE_TRUE);
         case 'f':   return pickle_parse_literal(c,v,"false",PICKLE_FALSE);
+        default:    return pickle_parse_number(c,v);
         case '\0':  return PICKLE_PARSE_EXPECT_VALUE;
-        default:    return PICKLE_PARSE_INVALID_VALUE;
     }
 }
 
@@ -64,4 +96,9 @@ int pickle_parse(pickle_value* v, const char* json){
 pickle_type pickle_get_type(const pickle_value* v){
     assert(v != NULL);
     return v->type;
+}
+
+double pickle_get_number(const pickle_value* v){
+    assert(v != NULL && v->type == PICKLE_NUMBER);
+    return v->n;
 }
