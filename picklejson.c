@@ -31,31 +31,41 @@ static int pickle_parse_null(pickle_context* c, pickle_value* v){
     return PICKLE_PARSE_OK;
 }
 
-/**
- * 向v中输入解析的值
- * @param c
- * @param v
- * @return
- */
+static int pickle_parse_true(pickle_context* c, pickle_value* v){
+    EXPECT(c,'t');
+    if(c->json[0] != 'r' || c->json[1] != 'u' || c->json[2] != 'e')
+        return PICKLE_PARSE_INVALID_VALUE;
+    c->json += 3;
+    v->type = PICKLE_TRUE;
+    return PICKLE_PARSE_OK;
+}
+
+static int pickle_parse_false(pickle_context* c,pickle_value* v){
+    EXPECT(c,'f');
+    if(c->json[0] != 'a' || c->json[1] != 'l' || c->json[2] != 's' || c->json[3] != 'e')
+        return PICKLE_PARSE_INVALID_VALUE;
+    c->json +=4;
+    v->type = PICKLE_FALSE;
+    return PICKLE_PARSE_OK;
+}
+
 static int pickle_parse_value(pickle_context* c, pickle_value* v){
     switch (*c->json) {
         case 'n':   return pickle_parse_null(c,v);
+        case 't':   return pickle_parse_true(c,v);
+        case 'f':   return pickle_parse_false(c,v);
         case '\0':  return PICKLE_PARSE_EXPECT_VALUE;
         default:    return PICKLE_PARSE_INVALID_VALUE;
     }
 }
 
-/**
- * 如果解析失败v将会返回NULL值，函数中先将v设置成了NULL值
- * @param v
- * @param json
- * @return
- */
+
 int pickle_parse(pickle_value* v, const char* json){
     pickle_context c;
     int ret = 0;
     assert(v != NULL);
     c.json = json;
+    //如果解析失败v将会返回NULL值，函数中先将v设置成了NULL值
     v->type = PICKLE_NULL;
     //移除字符前的空白
     pickle_parse_whitespace(&c);
