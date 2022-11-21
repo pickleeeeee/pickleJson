@@ -22,10 +22,15 @@ static int test_pass = 0;
 #define EXPECT_EQ_INT(expect, actual) EXPECT_EQ_BASE((expect) == (actual),expect,actual,"%d")
 #define EXPECT_EQ_DOUBLE(expect,actual) EXPECT_EQ_BASE((expect) == (actual),expect,actual,"%.17g")
 
+//TODO 2022.11.22.0:20
+
+#define EXPECT_EQ_STRING(expect,actual,alength) \
+            EXPECT_EQ_BASE(sizeof(expect) - 1) == alength &&
 #define TEST_ERROR(error, json)\
     do{\
         pickle_value v;\
-        v.type = PICKLE_FALSE;\
+        pickle_init(&v);\
+        v.type=PICKLE_FALSE;\
         EXPECT_EQ_INT(error, pickle_parse(&v, json));\
         EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));\
     }while(0)
@@ -33,15 +38,26 @@ static int test_pass = 0;
 #define TEST_NUMBER(expect,json)\
     do{\
         pickle_value v;\
+        pickle_init(&v);\
         EXPECT_EQ_INT(PICKLE_PARSE_OK,pickle_parse(&v, json));\
         EXPECT_EQ_INT(PICKLE_NUMBER,pickle_get_type(&v));\
         EXPECT_EQ_DOUBLE(expect,pickle_get_number(&v));\
     }while(0)
 
+#define TEST_STRING(expect, json, len)\
+    do{\
+        pickle_value v;\
+        pickle_init(&v);\
+        EXPECT_EQ_INT(PICKLE_PARSE_OK,pickle_parse(&v, json));\
+        EXPECT_EQ_INT((len),pickle_get_len(&v));\
+        EXPECT_EQ_INT(PICKLE_STRING,pickle_get_type(&v));\
+        EXPECT_EQ_INT(expect,pickle_get_string(&v));\
+    }while(0)
+
 
 static void test_parse_null(){
     pickle_value v;
-    v.type = PICKLE_FALSE;
+    pickle_init(&v);
     EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v, "null"));
     EXPECT_EQ_INT(PICKLE_NULL, pickle_get_type(&v));
 }
@@ -71,11 +87,11 @@ static void test_parse_invalid_value(){
 static void test_parse_root_not_singular(){
     TEST_ERROR(PICKLE_PARSE_ROOT_NOT_SINGULAR,"null x");
 
-#if 0
+#if 1
     /* invalid number */
-    TEST_ERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0123"); /* after zero should be '.' , 'E' , 'e' or nothing */
-    TEST_ERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0x0");
-    TEST_ERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0x123");
+    TEST_ERROR(PICKLE_PARSE_ROOT_NOT_SINGULAR, "0123"); /* after zero should be '.' , 'E' , 'e' or nothing */
+    TEST_ERROR(PICKLE_PARSE_ROOT_NOT_SINGULAR, "0x0");
+    TEST_ERROR(PICKLE_PARSE_ROOT_NOT_SINGULAR, "0x123");
 #endif
 }
 
@@ -88,14 +104,14 @@ static void test_parse_number_too_big() {
 
 static void test_parse_true(){
     pickle_value v;
-    v.type = PICKLE_FALSE;
+    pickle_init(&v);
     EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v, "true"));
     EXPECT_EQ_INT(PICKLE_TRUE, pickle_get_type(&v));
 }
 
 static void test_parse_false(){
     pickle_value v;
-    v.type = PICKLE_FALSE;
+    pickle_init(&v);
     EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v, "false"));
     EXPECT_EQ_INT(PICKLE_FALSE, pickle_get_type(&v));
 }
@@ -133,6 +149,22 @@ static void test_parse_number() {
     TEST_NUMBER(-1.7976931348623157e+308, "-1.7976931348623157e+308");
 #endif
 }
+
+#define TEST_STRING(expect, json) \
+    do{                           \
+        pickle_value v;           \
+        pickle_init(&v);            \
+        EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v,json)); \
+        EXPECT_EQ_INT(PICKLE_STRING, pickle_get_type(&v));     \
+        EXPECT_EQ_STRING();\
+    }while(0)
+
+static void test_parse_string(){
+
+}
+
+
+
 
 static void test_parse(){
     test_parse_null();

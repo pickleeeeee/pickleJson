@@ -134,34 +134,90 @@ void pickle_set_string(pickle_value* v,const char* s, size_t len){
     v->type = PICKLE_STRING;
 }
 
-double pickle_get_number(const pickle_value* v){
-    assert(v != NULL && v->type == PICKLE_NUMBER);
-    return v->u.n;
-}
+
 
 #ifndef PICKLE_PARSE_STACK_INIT_SIZE
 #define PICKLE_PARSE_STACK_INTI_SIZE 256
 #endif
 //缓冲区的push操作
-void pickle_context_push(pickle_context* c, size_t size){
+static void* pickle_context_push(pickle_context* c, size_t size){
     void* ret;
     assert(size > 0);
     //栈空间扩容
     if(c->top + size >= c->size){
-        //初始化缓冲区大小
         if(c->size == 0)
+            //如果当前的栈空间大小是0则初始化缓冲区大小
             c->size = PICKLE_PARSE_STACK_INTI_SIZE;
         while(c->top + size >= c->size)
             //每次扩容1.5倍
             c->size += c->size >> 1;
         c->stack = realloc(c->stack, c->size);
     }
-    //TODO 没看懂
+    //返回当前栈顶指针
     ret = c->stack + c->top;
+    //移动栈顶位置
     c->top += size;
     return ret;
 }
+//缓冲区的pop操作
+static void* pickle_context_pop(pickle_context* c,size_t size){
+    assert(c->top >= size);
+    return  c->stack + (c->top -= size);
+}
+
+//字符一个一个的压栈
+#define PUTC(c, ch) do{ *(char*)pickle_context_push(c, sizeof(char)) = (ch); } while(0)
+
+static int pickle_parse_string(pickle_context* c, pickle_value* v){
+    //备份栈顶，也就是一个待解析字符串最开始的位置
+    size_t head = c->top,len;
+    const char* p;
+    //字符串应该以"开头
+    EXPECT(c,'\"');
+    //执行完EXPECT之后，指针已经移到"后面的字符上了
+    p = c ->json;
+    for(;;){
+        //ch = *p; ++
+        char ch = *p++;
+        switch(ch){
+            //再次遇到"直接代表字符串结束了
+            case '\"':
+                len = c->top - head;
+                pickle_set_string(v, pickle_context_pop(c,len),len);
+                //c->json指向后续没有处理完的字符串
+                c->json = p;
+                return PICKLE_PARSE_OK;
+            case '\0':
+                //恢复栈顶
+                c->top = head;
+                return PICKLE_PARSE_MISS_QUOTATION_MARK;
+            default:
+                PUTC(c,ch);
+        }
+    }
+}
+
+
+int pickle_get_boolean(const pickle_value* v){
+    assert(v != NULL && (v->type == PICKLE_TRUE || v->type == PICKLE_FALSE));
+    return v->type;
+}
+
+
 
 void pickle_set_number(pickle_value* v, double n){
 
+}
+double pickle_get_number(const pickle_value* v){
+    assert(v != NULL && v->type == PICKLE_NUMBER);
+    return v->u.n;
+}
+
+const char* pickle_get_string(const pickle_value* v){
+    assert(v != NULL && v->type == PICKLE_STRING);
+    return v->u.s.s;
+}
+size_t pickle_get_len(const pickle_value* v){
+    assert(v != NULL && v->type == PICKLE_STRING);
+    return v->u.s.len;
 }
