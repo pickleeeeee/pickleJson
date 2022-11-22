@@ -7,8 +7,11 @@ typedef enum{PICKLE_NULL, PICKLE_FALSE, PICKLE_TRUE, PICKLE_NUMBER, PICKLE_STRIN
 
 typedef struct {
     union{
-        struct{ char* s; size_t  len;} s;    /* string */
-        double n;                            /* number */
+        struct{
+            char* s;
+            size_t  len;
+        } s;                            /* string */
+        double n;                       /* number */
     } u;
     pickle_type type;
 }pickle_value;
@@ -36,7 +39,7 @@ int pickle_get_boolean(const pickle_value* v);
 void pickle_set_boolean(pickle_value* v, int b);
 
 const char* pickle_get_string(const pickle_value* v);
-size_t pickle_get_len(const pickle_value* v);
+size_t pickle_get_string_len(const pickle_value* v);
 void pickle_set_string(pickle_value* v, const char* s, size_t size);
 
 //当且仅当pickle_type是PICKLE_NUMBER的时候,n才表示json的数字的数值

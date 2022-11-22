@@ -2,7 +2,14 @@
 // Created by Pickle on 2022/11/19.
 //*******************************
 #include <stdio.h>
+#include <string.h>
 #include "picklejson.h"
+
+/* 检测内存泄露 */
+#ifdef _WINDOWS
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#endif
 
 static int main_ret = 0;
 static int test_count = 0;
@@ -25,7 +32,10 @@ static int test_pass = 0;
 //TODO 2022.11.22.0:20
 
 #define EXPECT_EQ_STRING(expect,actual,alength) \
-            EXPECT_EQ_BASE(sizeof(expect) - 1) == alength &&
+            EXPECT_EQ_BASE(sizeof(expect) - 1 == alength && memcmp(expect,actual,alength) == 0,expect,actual,"%s")
+
+
+
 #define TEST_ERROR(error, json)\
     do{\
         pickle_value v;\
@@ -151,16 +161,17 @@ static void test_parse_number() {
 }
 
 #define TEST_STRING(expect, json) \
-    do{                           \
-        pickle_value v;           \
-        pickle_init(&v);            \
+    do{\
+        pickle_value v;\
+        pickle_init(&v);\
         EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v,json)); \
         EXPECT_EQ_INT(PICKLE_STRING, pickle_get_type(&v));     \
-        EXPECT_EQ_STRING();\
+        EXPECT_EQ_STRING(expect, pickle_get_string(&v),pickle_get_string_len(&v)); \
+        pickle_free(&v);\
     }while(0)
 
 static void test_parse_string(){
-
+    TEST_STRING("","\"\"");
 }
 
 
@@ -175,11 +186,17 @@ static void test_parse(){
     test_parse_false();
     test_parse_number();
     test_parse_number_too_big();
+
+    test_parse_string();
 }
 
 int main(){
+#ifdef _WINDOWS
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#endif
     test_parse();
     printf("%d/%d (%3.2f%%) passed]\n",test_pass,test_count,test_pass*100.0/test_count);
+
     return main_ret;
 }
 
