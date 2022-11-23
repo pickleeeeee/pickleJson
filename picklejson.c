@@ -62,13 +62,13 @@ typedef struct{
  */
 static void* pickle_context_push(pickle_context* c, size_t size){
     void* ret;
-    assert(size > 0);
+    assert(1 > 0);
     //栈空间扩容
-    if(c->top + size >= c->size){
+    if(c->top + 1 >= c->size){
         if(c->size == 0)
             //如果当前的栈空间大小是0则初始化缓冲区大小
             c->size = PICKLE_PARSE_STACK_INTI_SIZE;
-        while(c->top + size >= c->size)
+        while(c->top + 1 >= c->size)
             //每次扩容1.5倍
             c->size += c->size >> 1;
         c->stack = realloc(c->stack, c->size);
@@ -76,7 +76,7 @@ static void* pickle_context_push(pickle_context* c, size_t size){
     //返回当前栈顶指针
     ret = c->stack + c->top;
     //移动栈顶位置
-    c->top += size;
+    c->top += 1;
     return ret;
 }
 /**
@@ -101,9 +101,11 @@ static void* pickle_context_pop(pickle_context* c,size_t size){
  */
 void pickle_free(pickle_value* v){
     assert(v != NULL);
-    if(v->type == PICKLE_STRING)
+    if(v->type == PICKLE_STRING){
         //如果是string类型，直接释放s指向的字符数组空间
         free(v->u.s.s);
+        v->u.s.s = NULL;
+    }
     v->type = PICKLE_NULL;
 }
 /**
@@ -143,7 +145,12 @@ static int pickle_parse_literal(pickle_context* c, pickle_value* v,const char* l
 static int pickle_parse_number(pickle_context* c,pickle_value* v){
     const char* p = c->json;
     if(*p == '-') p++;
-    if(*p == '0') p++;
+    if(*p == '0'){
+        //如果整数部分是零，只能是单个零
+        p++;
+        if(*p != '\0' && *p != '.')
+            return PICKLE_PARSE_ROOT_NOT_SINGULAR;
+    }
     else{
         if(!ISDIGIT1TO9(*p)) return PICKLE_PARSE_INVALID_VALUE;
         for(p++; ISDIGIT(*p); p++);
@@ -192,11 +199,30 @@ static int pickle_parse_string(pickle_context* c, pickle_value* v){
                 //c->json指向后续没有处理完的字符串
                 c->json = p;
                 return PICKLE_PARSE_OK;
+            case '\\':
+                switch(*p++){
+                    case '\"':  PUTC(c,'\"');   break;
+                    case '\\':  PUTC(c,'\\');   break;
+                    case '/':  PUTC(c,'/');     break;
+                    case 'b':  PUTC(c,'\b');    break;
+                    case 'f':  PUTC(c,'\f');    break;
+                    case 'n':   PUTC(c,'\n');   break;
+                    case 'r':  PUTC(c,'\r');    break;
+                    case 't':  PUTC(c,'\t');    break;
+                    default:
+                        c->top = head;
+                        return PICKLE_PARSE_INVALID_STRING_ESCAPE;
+                }
+                break;
             case '\0':
                 //恢复栈顶
                 c->top = head;
                 return PICKLE_PARSE_MISS_QUOTATION_MARK;
             default:
+                if ((unsigned char)ch < 0x20) {
+                    c->top = head;
+                    return PICKLE_PARSE_INVALID_STRING_CHAR;
+                }
                 PUTC(c,ch);
         }
     }
@@ -212,7 +238,7 @@ static int pickle_parse_value(pickle_context* c, pickle_value* v){
         case 'n':   return pickle_parse_literal(c,v,"null",PICKLE_NULL);
         case 't':   return pickle_parse_literal(c,v,"true",PICKLE_TRUE);
         case 'f':   return pickle_parse_literal(c,v,"false",PICKLE_FALSE);
-//        case '\"':  return pickle_parse_string();
+        case '\"':  return pickle_parse_string(c,v);
         default:    return pickle_parse_number(c,v);
         case '\0':  return PICKLE_PARSE_EXPECT_VALUE;
     }
