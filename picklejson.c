@@ -13,6 +13,11 @@
  */
 
 /*
+ * 字符串解析失败后返回操作
+ */
+#define STRING_ERROR(ret) do { c-> top = head; return ret; } while(0)
+
+/*
  * 缓冲区扩充默认大小
  */
 #ifndef PICKLE_PARSE_STACK_INIT_SIZE
@@ -64,11 +69,11 @@ static void* pickle_context_push(pickle_context* c, size_t size){
     void* ret;
     assert(1 > 0);
     //栈空间扩容
-    if(c->top + 1 >= c->size){
+    if(c->top + size >= c->size){
         if(c->size == 0)
             //如果当前的栈空间大小是0则初始化缓冲区大小
             c->size = PICKLE_PARSE_STACK_INTI_SIZE;
-        while(c->top + 1 >= c->size)
+        while(c->top + size >= c->size)
             //每次扩容1.5倍
             c->size += c->size >> 1;
         c->stack = realloc(c->stack, c->size);
@@ -76,7 +81,7 @@ static void* pickle_context_push(pickle_context* c, size_t size){
     //返回当前栈顶指针
     ret = c->stack + c->top;
     //移动栈顶位置
-    c->top += 1;
+    c->top += size;
     return ret;
 }
 /**
@@ -174,8 +179,33 @@ static int pickle_parse_number(pickle_context* c,pickle_value* v){
     c->json = p;
     return PICKLE_PARSE_OK;
 }
+
+/**
+ * 将四位16进制字符转换成二进制序列
+ * @param p 待转换的字符串
+ * @param u 保存转换结果
+ * @return
+ */
+static const char* pickle_parse_hex4(const char* p, unsigned* u){
+    int i;
+    *u = 0;
+    //example:00A2
+    for(i = 0; i < 4; i++){
+        char ch = *p++;
+        *u <<= 4;
+        if(ch >= '0' && ch <= '9') *u |= ch - '0';
+        else if(ch >= 'A' && ch <= 'F') *u |= ch - ('A' - 10);
+        else if(ch >= 'a' && ch <= 'f') *u |= ch - ('a' - 10);
+        else
+            return NULL;
+    }
+    return p;
+}
+
+
 /**
  * 解析字符串
+ * unescaped = %x20-21 / %x23-5B / %x5D-10FFFF
  * @param c
  * @param v
  * @return
@@ -183,6 +213,10 @@ static int pickle_parse_number(pickle_context* c,pickle_value* v){
 static int pickle_parse_string(pickle_context* c, pickle_value* v){
     //备份栈顶，也就是一个待解析字符串最开始的位置
     size_t head = c->top,len;
+    //存储码点的方式用UTF-8，UTF-8最大四个字节正好和unsigned int 大小一致，所以用unsigned存储码点
+    unsigned u;
+    //用于低代理的范围检测
+    unsigned u2;
     const char* p;
     //字符串应该以"开头
     EXPECT(c,'\"');
@@ -190,7 +224,7 @@ static int pickle_parse_string(pickle_context* c, pickle_value* v){
     p = c ->json;
     for(;;){
         //ch = *p; ++
-        char ch = *p++;
+          char ch = *p++;
         switch(ch){
             //再次遇到"直接代表字符串结束了
             case '\"':
@@ -209,19 +243,38 @@ static int pickle_parse_string(pickle_context* c, pickle_value* v){
                     case 'n':   PUTC(c,'\n');   break;
                     case 'r':  PUTC(c,'\r');    break;
                     case 't':  PUTC(c,'\t');    break;
+                    case 'u':
+                        if(!(p = pickle_parse_hex4(p, &u)))
+                            STRING_ERROR(PICKLE_PARSE_INVALID_UNICODE_HEX);
+                        if( u >= 0xD800 && u <= 0xDBFF){/* surrogate pair */
+                            if(*p++ != '\\')
+                                STRING_ERROR(PICKLE_PARSE_INVALID_UNICODE_SURROGATE);
+                            if(*p++ != 'u')
+                                STRING_ERROR(PICKLE_PARSE_INVALID_UNICODE_SURROGATE);
+                            //解析低代理的四位二进制字符串
+                            if(!(p = pickle_parse_hex4(p, &u2)))
+                                STRING_ERROR(PICKLE_PARSE_INVALID_UNICODE_HEX);
+                            if(u2 < 0xDC00 || u2 > 0xDFFF)/* 低代理范围不合法，直接返回 */
+                                STRING_ERROR(PICKLE_PARSE_INVALID_UNICODE_SURROGATE);
+                            //高低代理转换成码点公式
+                            //codepoint = 0x10000 + (H − 0xD800) × 0x400 + (L − 0xDC00)
+                            //因为高代理左移了十位，所以这里|代替+
+                            u = (((u-0xD800) << 10) | (u2 - 0xDC00)) + 0x10000;
+                        }
+                        //TODO 码点转换成UTF-8存储
+                        //pickle_encode_utf8(c,u);
+                        break;
                     default:
-                        c->top = head;
-                        return PICKLE_PARSE_INVALID_STRING_ESCAPE;
+                        STRING_ERROR(PICKLE_PARSE_INVALID_STRING_ESCAPE);
                 }
                 break;
             case '\0':
                 //恢复栈顶
-                c->top = head;
-                return PICKLE_PARSE_MISS_QUOTATION_MARK;
+                STRING_ERROR(PICKLE_PARSE_MISS_QUOTATION_MARK);
             default:
+                //小于0x20的都是非打印字符，非法字符串，“和\都已经处理了，空格字符将会被去空格函数删掉
                 if ((unsigned char)ch < 0x20) {
-                    c->top = head;
-                    return PICKLE_PARSE_INVALID_STRING_CHAR;
+                    STRING_ERROR(PICKLE_PARSE_INVALID_STRING_CHAR);
                 }
                 PUTC(c,ch);
         }
