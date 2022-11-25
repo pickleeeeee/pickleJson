@@ -6,6 +6,7 @@
 #include <stdlib.h> /* errno, NULL */
 #include <math.h>   /* ERANGE, HUGE_VAL */
 #include <string.h> /* memcpy() */
+#include <ctype.h> /* isspace */
 
 //**********************************************************************
 /*
@@ -119,7 +120,8 @@ void pickle_free(pickle_value* v){
  */
 static void pickle_parse_whitespace(pickle_context* c){
     const char* p = c->json;
-    while(*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+//    while(*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+    while(isspace(*p))
         p++;
     c->json = p;
 }
