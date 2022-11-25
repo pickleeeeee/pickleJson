@@ -204,6 +204,25 @@ static const char* pickle_parse_hex4(const char* p, unsigned* u){
     return p;
 }
 
+/**
+ * 将码点转换成UTF-8形式存储
+ * @param c
+ * @param v
+ */
+static void pickle_encode_utf8(pickle_context* c,unsigned u){
+    if(u <= 0x7F)/* 一个字节 */
+        PUTC(c, u & 0xFF);
+    else if (u <= 0x7FF){/* 两个字节 */
+        PUTC(c, 0xc0 | ((u >> 6) & 0xFF));
+        PUTC(c, 0x80 | ( u       & 0x3F));
+    }else if(u <= 0xFFFF){
+        PUTC(c, 0xE0 | ((u >> 12) & 0xFF));
+        PUTC(c, 0x80 | ((u >> 6 ) & 0x3F));
+        PUTC(c, 0x80 | ((u        & 0x3F)));
+    }else{
+
+    }
+}
 
 /**
  * 解析字符串
@@ -264,7 +283,7 @@ static int pickle_parse_string(pickle_context* c, pickle_value* v){
                             u = (((u-0xD800) << 10) | (u2 - 0xDC00)) + 0x10000;
                         }
                         //TODO 码点转换成UTF-8存储
-                        //pickle_encode_utf8(c,u);
+                        pickle_encode_utf8(c,u);
                         break;
                     default:
                         STRING_ERROR(PICKLE_PARSE_INVALID_STRING_ESCAPE);
