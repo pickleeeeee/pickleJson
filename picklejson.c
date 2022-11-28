@@ -183,17 +183,19 @@ static int pickle_parse_number(pickle_context* c,pickle_value* v){
 }
 
 /**
- * 将四位16进制字符转换成二进制序列
- * @param p 待转换的字符串
- * @param u 保存转换结果
+ * 用一个unsigned int类型的u的前16个位存放4个十六进制数
+ * @param p 待转换的十六进制字符串
+ * @param u 保存转换结果 四个字节
  * @return
  */
 static const char* pickle_parse_hex4(const char* p, unsigned* u){
     int i;
     *u = 0;
+	//u是三十二位，可存放四位10进制数字
     //example:00A2
     for(i = 0; i < 4; i++){
         char ch = *p++;
+        //相当于*16
         *u <<= 4;
         if(ch >= '0' && ch <= '9') *u |= ch - '0';
         else if(ch >= 'A' && ch <= 'F') *u |= ch - ('A' - 10);
@@ -207,7 +209,7 @@ static const char* pickle_parse_hex4(const char* p, unsigned* u){
 /**
  * 将码点转换成UTF-8形式存储
  * @param c
- * @param v
+ * @param u
  */
 static void pickle_encode_utf8(pickle_context* c,unsigned u){
     if(u <= 0x7F)/* 一个字节 */
@@ -215,12 +217,16 @@ static void pickle_encode_utf8(pickle_context* c,unsigned u){
     else if (u <= 0x7FF){/* 两个字节 */
         PUTC(c, 0xc0 | ((u >> 6) & 0xFF));
         PUTC(c, 0x80 | ( u       & 0x3F));
-    }else if(u <= 0xFFFF){
+    }else if(u <= 0xFFFF){/* 三个字节 */
         PUTC(c, 0xE0 | ((u >> 12) & 0xFF));
         PUTC(c, 0x80 | ((u >> 6 ) & 0x3F));
         PUTC(c, 0x80 | ((u        & 0x3F)));
-    }else{
-
+    }else{/* 四个字节 */
+        assert(u <= 0x10FFFF);
+        PUTC(c,0xF0 | ((u >> 18) & 0xFF));
+        PUTC(c, 0x80 | ((u >> 12) & 0x3F));
+        PUTC(c, 0x80 | ((u >>  6) & 0x3F));
+        PUTC(c, 0x80 | ( u        & 0x3F));
     }
 }
 
@@ -239,7 +245,7 @@ static int pickle_parse_string(pickle_context* c, pickle_value* v){
     //用于低代理的范围检测
     unsigned u2;
     const char* p;
-    //字符串应该以"开头
+    //   "开头
     EXPECT(c,'\"');
     //执行完EXPECT之后，指针已经移到"后面的字符上了
     p = c ->json;
