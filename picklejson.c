@@ -41,6 +41,15 @@
  */
 #define ISDIGIT1TO9(ch)      ((ch) >= '1' && (ch) <= '9')
 
+/*
+ * 空格
+ */
+#define ISSPACE(ch)         ((ch) == ' ')
+
+/*
+ * 小数点
+ */
+#define  ISDOT(ch)          ((ch) == '.')
 //**********************************************************************
 /*
  * 数据结构
@@ -68,7 +77,7 @@ typedef struct{
  */
 static void* pickle_context_push(pickle_context* c, size_t size){
     void* ret;
-    assert(1 > 0);
+    assert(size > 0);
     //栈空间扩容
     if(c->top + size >= c->size){
         if(c->size == 0)
@@ -107,10 +116,13 @@ static void* pickle_context_pop(pickle_context* c,size_t size){
  */
 void pickle_free(pickle_value* v){
     assert(v != NULL);
-    if(v->type == PICKLE_STRING){
-        //如果是string类型，直接释放s指向的字符数组空间
+    if(v->type == PICKLE_STRING){/* 如果是string类型，直接释放s指向的字符数组空间 */
         free(v->u.s.s);
         v->u.s.s = NULL;
+    }
+    if(v->type == PICKLE_ARRAY){/* 如果是array类型，直接释放结点指向的元素 */
+        free(v->u.a.e);
+        v->u.a.e = NULL;
     }
     v->type = PICKLE_NULL;
 }
@@ -153,9 +165,10 @@ static int pickle_parse_number(pickle_context* c,pickle_value* v){
     const char* p = c->json;
     if(*p == '-') p++;
     if(*p == '0'){
-        //如果整数部分是零，只能是单个零
+        //0开始的字符后面只能是空格或者小数点或者结束标志
         p++;
-        if(*p != '\0' && *p != '.')
+        pickle_parse_whitespace(c);
+        if(!ISSPACE(*p) && !ISDOT(*p) && *p != '\0')
             return PICKLE_PARSE_ROOT_NOT_SINGULAR;
     }
     else{
@@ -288,7 +301,7 @@ static int pickle_parse_string(pickle_context* c, pickle_value* v){
                             //因为高代理左移了十位，所以这里|代替+
                             u = (((u-0xD800) << 10) | (u2 - 0xDC00)) + 0x10000;
                         }
-                        //TODO 码点转换成UTF-8存储
+                        //码点转换成UTF-8存储
                         pickle_encode_utf8(c,u);
                         break;
                     default:
@@ -307,6 +320,69 @@ static int pickle_parse_string(pickle_context* c, pickle_value* v){
         }
     }
 }
+
+//前向声明
+static int pickle_parse_value(pickle_context* c, pickle_value* v);
+/**
+ * 递归实现数组解析
+ * @param c 提供堆栈操作，和原始字符串
+ * @param v 最后返回结果
+ * @return
+ */
+static int pickle_parse_array(pickle_context* c, pickle_value* v){
+    //记录数组元素个数
+    size_t size = 0;
+    EXPECT(c,'[');
+    //消除空格 防止[     ] 这种情况
+    pickle_parse_whitespace(c);
+    int ret;
+    //遇到后括号直接返回
+    if(*c -> json == ']'){
+        c->json++;
+        v->type = PICKLE_ARRAY;
+        v->u.a.size = 0;
+        v->u.a.e = NULL;
+        return PICKLE_PARSE_OK;
+    }
+    //该循环负责不断解析数组中的元素
+    for(;;){
+        //存放下一层解析的单个元素
+        pickle_value e;
+        pickle_init(&e);
+        //消除空格
+        pickle_parse_whitespace(c);
+        if((ret = pickle_parse_value(c, &e) != PICKLE_PARSE_OK))
+            return ret;
+        //将解析到的单个元素入栈
+        // *(pickle_value*)pickle_context_push(c,sizeof(pickle_value)) = e;
+        memcpy(pickle_context_push(c,sizeof(pickle_value)),&e,sizeof(pickle_value));
+
+        //TODO 这里释放临时结点会导致字符串元素获取不到，因为释放会清空存放字符串的地址，导致之后访问不到字符串，只有确定该地址的字符串以后不用的时候再释放
+        //这里的malloc的字符串空间应该保留到测试结束之后再释放掉
+        //pickle_free(&e);
+
+        size++;
+        //防止元素后面由空格
+        pickle_parse_whitespace(c);
+        if(*c->json == ','){/* 跳过逗号 */
+            c->json++;
+        }else if(*c->json==']'){/* 检测到数组结束 */
+            c->json++;
+            v->type = PICKLE_ARRAY;
+            //记录元素个数
+            v->u.a.size = size;
+            //计算所有结点所占的空间
+            size *= sizeof(pickle_value);
+            //分配空间并且堆栈中的元素出栈
+            memcpy(v->u.a.e = (pickle_value*)malloc(size), pickle_context_pop(c,size),size);
+            return PICKLE_PARSE_OK;
+        }else{
+            return PICKLE_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+        }
+    }
+}
+
+
 /**
  * 解析json的逻辑判断
  * @param c
@@ -319,6 +395,7 @@ static int pickle_parse_value(pickle_context* c, pickle_value* v){
         case 't':   return pickle_parse_literal(c,v,"true",PICKLE_TRUE);
         case 'f':   return pickle_parse_literal(c,v,"false",PICKLE_FALSE);
         case '\"':  return pickle_parse_string(c,v);
+        case '[':   return pickle_parse_array(c,v);
         default:    return pickle_parse_number(c,v);
         case '\0':  return PICKLE_PARSE_EXPECT_VALUE;
     }
@@ -351,6 +428,10 @@ int pickle_parse(pickle_value* v, const char* json){
     free(c.stack);
     return ret;
 }
+
+
+
+
 
 //**********************************************************************
 /*
@@ -445,4 +526,18 @@ void pickle_set_number(pickle_value* v, double n){
 double pickle_get_number(const pickle_value* v){
     assert(v != NULL && v->type == PICKLE_NUMBER);
     return v->u.n;
+}
+
+/**
+ * @param v
+ * @return 元素的个数
+ */
+size_t pickle_get_array_size(const pickle_value* v){
+    assert(v != NULL && v->type == PICKLE_ARRAY);
+    return v->u.a.size;
+}
+pickle_value* pickle_get_array_element(const pickle_value* v, size_t index){
+    assert(v != NULL && v->type == PICKLE_ARRAY);
+    assert(index < v->u.a.size);
+    return &v->u.a.e[index];
 }

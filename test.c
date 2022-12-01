@@ -60,6 +60,14 @@ static int test_pass = 0;
         pickle_free(&v);\
     }while(0)
 
+#if defined(_MSC_VER)
+#define EXPECT_EQ_SIZE_T(expect, actual) EXPECT_EQ_BASE((expect) == (actual), (size_t)expect, (size_t)actual, "%Iu")
+#else
+#define EXPECT_EQ_SIZE_T(expect, actual) EXPECT_EQ_BASE((expect) == (actual), (size_t)expect, (size_t)actual, "%zu")
+#endif
+
+
+
 static void test_parse_expect_value(){
     TEST_ERROR(PICKLE_PARSE_EXPECT_VALUE, "");
     TEST_ERROR(PICKLE_PARSE_EXPECT_VALUE, " ");
@@ -79,6 +87,12 @@ static void test_parse_invalid_value(){
     TEST_ERROR(PICKLE_PARSE_INVALID_VALUE, "inf");
     TEST_ERROR(PICKLE_PARSE_INVALID_VALUE, "NAN");
     TEST_ERROR(PICKLE_PARSE_INVALID_VALUE, "nan");
+#endif
+
+#if 0
+    /* invalid array */
+    TEST_ERROR(PICKLE_PARSE_INVALID_VALUE, "[1,]");
+    TEST_ERROR(PICKLE_PARSE_INVALID_VALUE, "[\"a\", nul]");
 #endif
 }
 
@@ -155,6 +169,15 @@ static void test_parse_number_too_big() {
 #endif
 }
 
+static void test_parse_miss_comma_or_square_bracket() {
+#if 1
+    TEST_ERROR(PICKLE_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1");
+    TEST_ERROR(PICKLE_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1}");
+    TEST_ERROR(PICKLE_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1 2");
+    TEST_ERROR(PICKLE_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[[]");
+#endif
+}
+
 static void test_access_null(){
     pickle_value v;
     pickle_init(&v);
@@ -210,10 +233,32 @@ static void test_parse_string(){
     TEST_STRING("\xF0\x9D\x84\x9E", "\"\\ud834\\udd1e\"");  /* G clef sign U+1D11E */
 }
 
+static void test_parse_array(){
+    pickle_value v;
+    pickle_init(&v);
+    EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v, "[ ]"));
+    EXPECT_EQ_INT(PICKLE_ARRAY, pickle_get_type(&v));
+    EXPECT_EQ_SIZE_T(0, pickle_get_array_size(&v));
+    pickle_free(&v);
+
+    pickle_init(&v);
+    EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v, "[ null , false , true , 123 , \"abc\" ]"));
+    EXPECT_EQ_INT(PICKLE_ARRAY, pickle_get_type(&v));
+    EXPECT_EQ_SIZE_T(5, pickle_get_array_size(&v));
+    EXPECT_EQ_INT(PICKLE_NULL,   pickle_get_type(pickle_get_array_element(&v, 0)));
+    EXPECT_EQ_INT(PICKLE_FALSE,  pickle_get_type(pickle_get_array_element(&v, 1)));
+    EXPECT_EQ_INT(PICKLE_TRUE,   pickle_get_type(pickle_get_array_element(&v, 2)));
+    EXPECT_EQ_INT(PICKLE_NUMBER, pickle_get_type(pickle_get_array_element(&v, 3)));
+    EXPECT_EQ_INT(PICKLE_STRING, pickle_get_type(pickle_get_array_element(&v, 4)));
+    EXPECT_EQ_DOUBLE(123.0, pickle_get_number(pickle_get_array_element(&v, 3)));
+    EXPECT_EQ_STRING("abc", pickle_get_string(pickle_get_array_element(&v, 4)), pickle_get_string_len(pickle_get_array_element(&v, 4)));
+    pickle_free(&v);
+}
+
+
 static void test_access_boolean(){
     pickle_value v;
     pickle_init(&v);
-    pickle_set_string(&v,"a",1);
     pickle_set_boolean(&v,1);
     EXPECT_EQ_TRUE(pickle_get_boolean(&v));
     pickle_set_boolean(&v,0);
@@ -224,7 +269,6 @@ static void test_access_boolean(){
 static void test_access_number(){
     pickle_value v;
     pickle_init(&v);
-    pickle_set_string(&v, "a", 1);
     pickle_set_number(&v, 1234.5);
     EXPECT_EQ_DOUBLE(1234.5, pickle_get_number(&v));
 }
@@ -252,6 +296,7 @@ static void test_parse(){
     test_parse_number();
     test_parse_number_too_big();
     test_parse_string();
+    test_parse_array();
 
     test_access_null();
     test_access_boolean();

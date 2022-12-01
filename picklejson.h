@@ -11,17 +11,17 @@ typedef enum{PICKLE_NULL, PICKLE_FALSE, PICKLE_TRUE, PICKLE_NUMBER, PICKLE_STRIN
 
 /*
  * 结点
+ * pickle_value结构体内部使用了自身类型的指针所以要使用向前说明
  */
-typedef struct {
+typedef struct pickle_value  pickle_value;
+struct pickle_value {
     union{
-        struct{
-            char* s;
-            size_t  len;
-        } s;                            /* string */
-        double n;                       /* number */
+        struct { pickle_value* e; size_t size;} a;  /* array */
+        struct{ char* s; size_t  len;} s; /* string */
+        double n; /* number */
     } u;
     pickle_type type;
-}pickle_value;
+};
 
 /*
  * 分析返回结果枚举
@@ -36,8 +36,11 @@ enum {
     PICKLE_PARSE_INVALID_STRING_ESCAPE,
     PICKLE_PARSE_INVALID_STRING_CHAR,
     PICKLE_PARSE_INVALID_UNICODE_HEX,
-    PICKLE_PARSE_INVALID_UNICODE_SURROGATE
+    PICKLE_PARSE_INVALID_UNICODE_SURROGATE,
+    PICKLE_PARSE_MISS_COMMA_OR_SQUARE_BRACKET
+
 };
+
 void pickle_free(pickle_value* v);
 
 int pickle_parse(pickle_value* v, const char* json);
@@ -53,4 +56,7 @@ void pickle_set_boolean(pickle_value* v, int b);
 
 void pickle_set_number(pickle_value* v,double n);
 double pickle_get_number(const pickle_value* v);
+
+size_t pickle_get_array_size(const pickle_value* v);
+pickle_value* pickle_get_array_element(const pickle_value* v, size_t index);
 #endif
