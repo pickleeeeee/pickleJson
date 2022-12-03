@@ -235,6 +235,8 @@ static void test_parse_string(){
 
 static void test_parse_array(){
     pickle_value v;
+    size_t i, j;
+
     pickle_init(&v);
     EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v, "[ ]"));
     EXPECT_EQ_INT(PICKLE_ARRAY, pickle_get_type(&v));
@@ -252,6 +254,23 @@ static void test_parse_array(){
     EXPECT_EQ_INT(PICKLE_STRING, pickle_get_type(pickle_get_array_element(&v, 4)));
     EXPECT_EQ_DOUBLE(123.0, pickle_get_number(pickle_get_array_element(&v, 3)));
     EXPECT_EQ_STRING("abc", pickle_get_string(pickle_get_array_element(&v, 4)), pickle_get_string_len(pickle_get_array_element(&v, 4)));
+    pickle_free(&v);
+
+
+    pickle_init(&v);
+    EXPECT_EQ_INT(PICKLE_PARSE_OK, pickle_parse(&v, "[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]"));
+    EXPECT_EQ_INT(PICKLE_ARRAY, pickle_get_type(&v));
+    EXPECT_EQ_SIZE_T(4, pickle_get_array_size(&v));
+    for (i = 0; i < 4; i++) {
+        pickle_value* a = pickle_get_array_element(&v, i);
+        EXPECT_EQ_INT(PICKLE_ARRAY, pickle_get_type(a));
+        EXPECT_EQ_SIZE_T(i, pickle_get_array_size(a));
+        for (j = 0; j < i; j++) {
+            pickle_value* e = pickle_get_array_element(a, j);
+            EXPECT_EQ_INT(PICKLE_NUMBER, pickle_get_type(e));
+            EXPECT_EQ_DOUBLE((double)j, pickle_get_number(e));
+        }
+    }
     pickle_free(&v);
 }
 
@@ -291,6 +310,7 @@ static void test_parse(){
     test_parse_invalid_string_escape();
     test_parse_invalid_unicode_hex();
     test_parse_invalid_unicode_surrogate();
+    test_parse_miss_comma_or_square_bracket();
     test_parse_true();
     test_parse_false();
     test_parse_number();
@@ -309,7 +329,7 @@ int main(){
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
     test_parse();
-    printf("%d/%d (%3.2f%%) passed]\n",test_pass,test_count,test_pass*100.0/test_count);
+    printf("%d/%d (%3.2f%%) passed\n",test_pass,test_count,test_pass*100.0/test_count);
     return main_ret;
 }
 

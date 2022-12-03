@@ -112,17 +112,25 @@ static void* pickle_context_pop(pickle_context* c,size_t size){
 
 /**
  * 释放<节点>字符数组所占的内存空间,并且把<节点>的类型设置为PICKLE_NULL
+ * 递归调用释放数组中的元素，最后再释放本身的v->u.a.e
  * @param v
  */
 void pickle_free(pickle_value* v){
+    size_t i;
     assert(v != NULL);
-    if(v->type == PICKLE_STRING){/* 如果是string类型，直接释放s指向的字符数组空间 */
-        free(v->u.s.s);
-        v->u.s.s = NULL;
-    }
-    if(v->type == PICKLE_ARRAY){/* 如果是array类型，直接释放结点指向的元素 */
-        free(v->u.a.e);
-        v->u.a.e = NULL;
+    switch(v->type){
+        case PICKLE_STRING:
+            free(v->u.s.s);
+            break;
+        case PICKLE_ARRAY:
+            //如果当前是一个数组，遍历当前数组内所有的元素
+            for(i = 0; i < v->u.a.size;i++){
+                pickle_free(&v->u.a.e[i]);
+            }
+            free(v->u.a.e);
+            break;
+        default:
+            break;
     }
     v->type = PICKLE_NULL;
 }
@@ -330,6 +338,7 @@ static int pickle_parse_value(pickle_context* c, pickle_value* v);
  * @return
  */
 static int pickle_parse_array(pickle_context* c, pickle_value* v){
+    int i;
     //记录数组元素个数
     size_t size = 0;
     EXPECT(c,'[');
@@ -352,7 +361,7 @@ static int pickle_parse_array(pickle_context* c, pickle_value* v){
         //消除空格
         pickle_parse_whitespace(c);
         if((ret = pickle_parse_value(c, &e) != PICKLE_PARSE_OK))
-            return ret;
+            break;
         //将解析到的单个元素入栈
         // *(pickle_value*)pickle_context_push(c,sizeof(pickle_value)) = e;
         memcpy(pickle_context_push(c,sizeof(pickle_value)),&e,sizeof(pickle_value));
@@ -377,9 +386,15 @@ static int pickle_parse_array(pickle_context* c, pickle_value* v){
             memcpy(v->u.a.e = (pickle_value*)malloc(size), pickle_context_pop(c,size),size);
             return PICKLE_PARSE_OK;
         }else{
-            return PICKLE_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+            ret = PICKLE_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+            break;
         }
     }
+    //pop and free values on the stack
+    for(i = 0; i < size; i++){
+        pickle_free((pickle_value*)pickle_context_pop(c,sizeof(pickle_value)));
+    }
+    return ret;
 }
 
 
